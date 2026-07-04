@@ -90,8 +90,8 @@ class WalkerEnv(gym.Env):
             target_x = self.np_random.uniform(-5, 5)
             target_y = self.np_random.uniform(-5, 5)
         
-        self._agent_location = [agent_x, agent_y, 1]
-        self._target_location = [target_x, target_y, 1]
+        self._agent_location = [agent_x, agent_y, 0.5]
+        self._target_location = [target_x, target_y, 0.5]
         self._prevDistance = ((target_x)**2 + (target_y)**2)**0.5
         self._step_count = 0
         
@@ -99,7 +99,7 @@ class WalkerEnv(gym.Env):
         p.setGravity(0,0,-9.81)
         p.loadURDF("plane.urdf")
         self.target = p.loadURDF("r2d2.urdf", self._target_location, p.getQuaternionFromEuler([0,0,0]))
-        self.robot = p.loadURDF("laikago/laikago.urdf",self._agent_location, p.getQuaternionFromEuler([0,0,0]))
+        self.robot = p.loadURDF("laikago/laikago.urdf",self._agent_location, p.getQuaternionFromEuler([np.deg2rad(90),0,0]))
 
         observation = self._get_obs()
         return observation, {}
@@ -133,7 +133,7 @@ class WalkerEnv(gym.Env):
         if distance < 0.5:  # pick a threshold
             terminated = True
             reward += COMPLETION
-        elif abs(observation["baseOrientation"][0]) > max_tilt or abs(observation["baseOrientation"][1]) > max_tilt:
+        elif abs(observation["baseOrientation"][0]) > np.deg2rad(135) or abs(observation["baseOrientation"][1]) > max_tilt:
             terminated = True
             reward -= FAILIURE
 
@@ -153,9 +153,9 @@ class WalkerEnv(gym.Env):
         
         # Compute Upright Reward
         tiltThreshold = np.deg2rad(20)
-        if abs(observation["baseOrientation"][0]) < tiltThreshold and abs(observation["baseOrientation"][1]) < tiltThreshold:
+        if abs(observation["baseOrientation"][0]) < np.deg2rad(110) and abs(observation["baseOrientation"][1]) < tiltThreshold:
             reward += UPRIGHT
-        elif abs(observation["baseOrientation"][0]) > tiltThreshold or abs(observation["baseOrientation"][1]) > tiltThreshold:
+        elif abs(observation["baseOrientation"][0]) > np.deg2rad(110) or abs(observation["baseOrientation"][1]) > tiltThreshold:
             reward -= UPRIGHT
         
         return observation, reward, terminated, truncated, {}
