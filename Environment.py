@@ -1,9 +1,7 @@
 import pybullet as p
 import pybullet_data
-import time
 import numpy as np
 import gymnasium as gym
-from torch import seed
 
 class WalkerEnv(gym.Env):
     def __init__(self):
@@ -15,6 +13,10 @@ class WalkerEnv(gym.Env):
         # Declare the agent and target location
         self._agent_location  = np.array([-1, -1, -1], dtype=np.float32) 
         self._target_location = np.array([-1, -1, -1], dtype=np.float32)
+        self.max_episode_steps = 1000
+        self._step_count = 0
+
+        self._jointArray = [i for i in range(p.getNumJoints(self.robot))]
         
         self.observation_space = gym.spaces.Dict(
             {
@@ -24,8 +26,8 @@ class WalkerEnv(gym.Env):
                     dtype=np.float32
                 ),
                 "jointAngles": gym.spaces.Box(
-                    low=np.array([-np.pi for x in range(12)]),
-                    high=np.array([np.pi for y in range(12)]),
+                    low=np.array([-np.pi for x in range(len(self._jointArray))]),
+                    high=np.array([np.pi for y in range(len(self._jointArray))]),
                     dtype=np.float32
                 ),
                 "jointVelocities": gym.spaces.Box(
@@ -51,7 +53,7 @@ class WalkerEnv(gym.Env):
 
         jointUpper = []
         jointLower = []
-        for i in range(12):
+        for i in range(len(self._jointArray)):
             jointInfo = p.getJointInfo(self.robot, i)
             jointUpper.append(jointInfo[9])
             jointLower.append(jointInfo[8])
@@ -66,7 +68,7 @@ class WalkerEnv(gym.Env):
         # Get and store all the observations as local variables
         position, orientation = p.getBasePositionAndOrientation(self.robot)
         roll, pitch, _ = p.getEularFromQuaternion(orientation) # Used for base orientation
-        joint_states = p.getJointStates(self.robot, [i for i in range(12)]) # Used for Joint Angles and joint Velocities
+        joint_states = p.getJointStates(self.robot, self._jointArray) # Used for Joint Angles and joint Velocities
         jointAngles = np.array([state[0] for state in joint_states],dtype=np.float32)
         jointVelocities = np.array([state[1] for state in joint_states],dtype=np.float32)
         _, baseAngularVelocity = p.getBaseVelocity(self.robot) # Used for baseAngularVelocity
@@ -96,6 +98,8 @@ class WalkerEnv(gym.Env):
         
         self._agent_location = [agent_x, agent_y, 0]
         self._target_location = [target_x, target_y, 0]
+        self._prevDistance = ((target_x)**2 + (target_y)**2)**0.5
+        self._step_count = 0
         
         p.resetSimulation()
         p.setGravity(0,0,-9.81)
@@ -107,17 +111,56 @@ class WalkerEnv(gym.Env):
         return observation
     
     def step(self, action):
+        self._step_count += 1
+
+        # REWARD CONSTANTS
+        DISTANCE = 1.0
+        UPRIGHT = 0.1
+        FAILIURE = 20.0
+        COMPLETION = 20.0
+
+        reward = 0
+        terminated = False
+        truncated = False
+
         # Apply the Action
-        p.setJointMotorControlArray(self.robot, [i for i in range(12)], p.POSITION_CONTROL, action)
+        p.setJointMotorControlArray(self.robot, self._jointArray, p.POSITION_CONTROL, action)
 
         # Advance the simulation
         p.stepSimulation()
 
-        # Check if terminated
-
         # Get Observations
         observation = self._get_obs()
+        
+        # Check if terminated (Robot has reached the target position / Robot has fallen over)  
+        max_tilt = np.deg2rad(45)
 
-        # Compute Reward
+        if observation["relativeTargetPosition"] == np.array([0, 0], dtype=np.float32):
+            terminated = True
+            reward += COMPLETION
+        elif abs(observation["baseOrientation"][0]) > max_tilt or abs(observation["baseOrientation"][1]) > max_tilt:
+            terminated = True
+            reward -= FAILIURE
 
-    
+        # Check if Truncated
+        if self._step_count >= self.max_episode_steps:
+            truncated = True
+
+        # Compute Distance Reward
+        currentDistance = ((observation["relativeTargetPosition"][0])**2 + (observation["relativeTargetPosition"][1])**2)**0.5
+
+        if currentDistance < self._prevDistance:
+            reward += DISTANCE
+        elif currentDistance > self._prevDistance:
+            reward -= DISTANCE
+        
+        self._prevDistance = currentDistance
+        
+        # Compute Upright Reward
+        tiltThreshold = np.deg2rad(20)
+        if abs(observation["baseOrientation"][0]) < tiltThreshold and abs(observation["baseOrientation"][1]) < tiltThreshold:
+            reward += UPRIGHT
+        elif abs(observation["baseOrientation"][0]) > tiltThreshold or abs(observation["baseOrientation"][1]) > tiltThreshold:
+            reward -= UPRIGHT
+        
+        return observation, reward, terminated, truncated, {}
