@@ -15,8 +15,8 @@ class WalkerEnv(gym.Env):
         self._target_location = np.array([-1, -1, -1], dtype=np.float32)
         self.max_episode_steps = 1000
         self._step_count = 0
-
-        self._jointArray = [i for i in range(p.getNumJoints(self.robot))]
+        
+        self._jointArray = [i for i in range(12)]
         
         self.observation_space = gym.spaces.Dict(
             {
@@ -51,23 +51,17 @@ class WalkerEnv(gym.Env):
             }
         )
 
-        jointUpper = []
-        jointLower = []
-        for i in range(len(self._jointArray)):
-            jointInfo = p.getJointInfo(self.robot, i)
-            jointUpper.append(jointInfo[9])
-            jointLower.append(jointInfo[8])
-
         self.action_space = gym.spaces.Box(
-            low=np.array(jointLower, dtype=np.float32),
-            high=np.array(jointUpper, dtype=np.float32),
+            low=-np.pi,
+            high=np.pi,
+            shape=(12,),
             dtype=np.float32
         )
 
     def _get_obs(self):
         # Get and store all the observations as local variables
         position, orientation = p.getBasePositionAndOrientation(self.robot)
-        roll, pitch, _ = p.getEularFromQuaternion(orientation) # Used for base orientation
+        roll, pitch, _ = p.getEulerFromQuaternion(orientation) # Used for base orientation
         joint_states = p.getJointStates(self.robot, self._jointArray) # Used for Joint Angles and joint Velocities
         jointAngles = np.array([state[0] for state in joint_states],dtype=np.float32)
         jointVelocities = np.array([state[1] for state in joint_states],dtype=np.float32)
@@ -96,8 +90,8 @@ class WalkerEnv(gym.Env):
             target_x = self.np_random.uniform(-5, 5)
             target_y = self.np_random.uniform(-5, 5)
         
-        self._agent_location = [agent_x, agent_y, 0]
-        self._target_location = [target_x, target_y, 0]
+        self._agent_location = [agent_x, agent_y, 1]
+        self._target_location = [target_x, target_y, 1]
         self._prevDistance = ((target_x)**2 + (target_y)**2)**0.5
         self._step_count = 0
         
@@ -105,10 +99,10 @@ class WalkerEnv(gym.Env):
         p.setGravity(0,0,-9.81)
         p.loadURDF("plane.urdf")
         self.target = p.loadURDF("r2d2.urdf", self._target_location, p.getQuaternionFromEuler([0,0,0]))
-        self.robot = p.loadURDF("laikago.urdf",self._agent_location, p.getQuaternionFromEuler([0,0,0]))
+        self.robot = p.loadURDF("laikago/laikago.urdf",self._agent_location, p.getQuaternionFromEuler([0,0,0]))
 
         observation = self._get_obs()
-        return observation
+        return observation, {}
     
     def step(self, action):
         self._step_count += 1
@@ -135,7 +129,8 @@ class WalkerEnv(gym.Env):
         # Check if terminated (Robot has reached the target position / Robot has fallen over)  
         max_tilt = np.deg2rad(45)
 
-        if observation["relativeTargetPosition"] == np.array([0, 0], dtype=np.float32):
+        distance = np.linalg.norm(observation["relativeTargetPosition"])
+        if distance < 0.5:  # pick a threshold
             terminated = True
             reward += COMPLETION
         elif abs(observation["baseOrientation"][0]) > max_tilt or abs(observation["baseOrientation"][1]) > max_tilt:
