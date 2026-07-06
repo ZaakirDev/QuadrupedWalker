@@ -13,8 +13,9 @@ gym.register(
 # Create the environment
 env = gym.make("gymnasium_env/Walker-v0")
 model = PPO("MultiInputPolicy", env, verbose=1)
+# model = PPO.load("WalkerPPO", env=env)
 
-model.learn(total_timesteps=10000)
+model.learn(total_timesteps=100000)
 model.save("WalkerPPO")
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
 print(f"Mean reward: {mean_reward}")

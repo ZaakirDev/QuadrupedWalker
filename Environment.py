@@ -6,7 +6,7 @@ import gymnasium as gym
 class WalkerEnv(gym.Env):
     def __init__(self):
         # Setup pybullet simulation
-        physicsClient = p.connect(p.GUI) # or p.DIRECT for non-graphical version
+        physicsClient = p.connect(p.GUI) # p.GUI/p.DIRECT
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0,0,-9.81)
         
@@ -86,7 +86,7 @@ class WalkerEnv(gym.Env):
         target_x = 0
         target_y = 0
 
-        while target_x == 0 or target_y == 0:
+        while abs(target_x) < 2.5 and abs(target_y) < 2.5:
             target_x = self.np_random.uniform(-5, 5)
             target_y = self.np_random.uniform(-5, 5)
         
