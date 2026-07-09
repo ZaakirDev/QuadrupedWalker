@@ -115,7 +115,7 @@ class WalkerEnv(gym.Env):
         # REWARD CONSTANTS
         DISTANCE = 1.0
         UPRIGHT = 0.1
-        COMPLETION = 20.0
+        COMPLETION = 50.0
 
         reward = 0
         terminated = False
