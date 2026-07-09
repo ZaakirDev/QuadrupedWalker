@@ -4,9 +4,14 @@ import numpy as np
 import gymnasium as gym
 
 class WalkerEnv(gym.Env):
-    def __init__(self):
-        # Setup pybullet simulation
-        physicsClient = p.connect(p.DIRECT) # p.GUI/p.DIRECT
+    def __init__(self, render_mode=None):
+
+        self.render_mode = render_mode
+        if self.render_mode == "human":
+            p.connect(p.GUI)
+        else:
+            p.connect(p.DIRECT)
+
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0,0,-9.81)
         

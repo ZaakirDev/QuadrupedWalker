@@ -6,7 +6,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 
 # Selection
-select = int(input("1. Walker\n2. Stand"))
+select = int(input("1. Walker\n2. Stand\n"))
 if select == 1:
     Mode = "Walker"
     gym.register(
@@ -21,9 +21,9 @@ else:
     )
 
 # Create the environment
-env = gym.make(f"gymnasium_env/{Mode}-v0")
-model = PPO("MultiInputPolicy", env, verbose=1)
-# model = PPO.load(f"{Mode}PPO", env=env)
+env = gym.make(f"gymnasium_env/{Mode}-v0", render_mode="human")
+# model = PPO("MultiInputPolicy", env, verbose=1)
+model = PPO.load(f"{Mode}PPO", env=env)
 
 model.learn(total_timesteps=100000)
 # model.save("WalkerPPO")

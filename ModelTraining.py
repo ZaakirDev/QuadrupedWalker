@@ -5,6 +5,8 @@ from standEnv import *
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 
+RENDER_MODE = "human" # human / direct
+
 """
 STANDING PHASE ===================================================================
 """
@@ -16,7 +18,7 @@ gym.register(
 )
 
 # Create the environment
-env = gym.make("gymnasium_env/Stand-v0")
+env = gym.make("gymnasium_env/Stand-v0", render_mode=RENDER_MODE)
 model = PPO("MultiInputPolicy", env, verbose=1)
 
 model.learn(total_timesteps=1500000)
@@ -38,7 +40,7 @@ gym.register(
 )
 
 # Create the environment
-env = gym.make("gymnasium_env/Walker-v0")
+env = gym.make("gymnasium_env/Walker-v0", render_mode=RENDER_MODE)
 model = PPO.load("StandPPO", env=env)
 
 model.learn(total_timesteps=2500000)
