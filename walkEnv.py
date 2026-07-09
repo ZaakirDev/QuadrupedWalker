@@ -110,7 +110,6 @@ class WalkerEnv(gym.Env):
         # REWARD CONSTANTS
         DISTANCE = 1.0
         UPRIGHT = 0.1
-        FAILIURE = 20.0
         COMPLETION = 20.0
 
         reward = 0
@@ -127,15 +126,15 @@ class WalkerEnv(gym.Env):
         observation = self._get_obs()
         
         # Check if terminated (Robot has reached the target position / Robot has fallen over)  
-        max_tilt = np.deg2rad(45)
+        max_tilt = 45
 
         distance = np.linalg.norm(observation["relativeTargetPosition"])
         if distance < 0.5:  # pick a threshold
             terminated = True
             reward += COMPLETION
-        elif abs(observation["baseOrientation"][0]) > np.deg2rad(135) or abs(observation["baseOrientation"][1]) > max_tilt:
+        elif abs(observation["baseOrientation"][0]) > np.deg2rad(90 + max_tilt) or abs(observation["baseOrientation"][1]) > np.deg2rad(max_tilt):
             terminated = True
-            reward -= FAILIURE
+            reward -= COMPLETION
 
         # Check if Truncated
         if self._step_count >= self.max_episode_steps:
@@ -152,10 +151,10 @@ class WalkerEnv(gym.Env):
         self._prevDistance = currentDistance
         
         # Compute Upright Reward
-        tiltThreshold = np.deg2rad(20)
-        if abs(observation["baseOrientation"][0]) < np.deg2rad(110) and abs(observation["baseOrientation"][1]) < tiltThreshold:
+        tiltThreshold = 20
+        if abs(observation["baseOrientation"][0]) < np.deg2rad(90 + tiltThreshold) and abs(observation["baseOrientation"][1]) < np.deg2rad(tiltThreshold):
             reward += UPRIGHT
-        elif abs(observation["baseOrientation"][0]) > np.deg2rad(110) or abs(observation["baseOrientation"][1]) > tiltThreshold:
+        elif abs(observation["baseOrientation"][0]) > np.deg2rad(90 + tiltThreshold) or abs(observation["baseOrientation"][1]) > np.deg2rad(tiltThreshold):
             reward -= UPRIGHT
         
         return observation, reward, terminated, truncated, {}

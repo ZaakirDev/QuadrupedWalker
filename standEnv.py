@@ -59,7 +59,7 @@ class StandEnv(gym.Env):
 
     def _get_obs(self):
         # Get and store all the observations as local variables
-        position, orientation = p.getBasePositionAndOrientation(self.robot)
+        _, orientation = p.getBasePositionAndOrientation(self.robot)
         roll, pitch, _ = p.getEulerFromQuaternion(orientation) # Used for base orientation
         joint_states = p.getJointStates(self.robot, self._jointArray) # Used for Joint Angles and joint Velocities
         jointAngles = np.array([state[0] for state in joint_states],dtype=np.float32)
@@ -97,7 +97,6 @@ class StandEnv(gym.Env):
 
         # REWARD CONSTANTS
         UPRIGHT = 0.1
-        FAILIURE = 20.0
         COMPLETION = 20.0
 
         reward = 0
@@ -114,24 +113,23 @@ class StandEnv(gym.Env):
         observation = self._get_obs()
         
         # Check if terminated (Robot has reached the target position / Robot has fallen over)  
-        max_tilt = np.deg2rad(45)
-
-        if abs(observation["baseOrientation"][0]) > np.deg2rad(135) or abs(observation["baseOrientation"][1]) > max_tilt:
+        max_tilt = 45
+        if abs(observation["baseOrientation"][0]) > np.deg2rad(90 + max_tilt) or abs(observation["baseOrientation"][1]) > np.deg2rad(max_tilt):
             terminated = True
-            reward -= FAILIURE
+            reward -= COMPLETION
 
         # Check if Truncated
         if self._step_count >= self.max_episode_steps:
             truncated = True
 
-            if terminated == False:
-                reward += COMPLETION
+        if self._step_count >= self.max_episode_steps and terminated == False:
+            reward += COMPLETION
         
         # Compute Upright Reward
-        tiltThreshold = np.deg2rad(20)
-        if abs(observation["baseOrientation"][0]) < np.deg2rad(110) and abs(observation["baseOrientation"][1]) < tiltThreshold:
+        tiltThreshold = 20
+        if abs(observation["baseOrientation"][0]) < np.deg2rad(90 + tiltThreshold) and abs(observation["baseOrientation"][1]) < np.deg2rad(tiltThreshold):
             reward += UPRIGHT
-        elif abs(observation["baseOrientation"][0]) > np.deg2rad(110) or abs(observation["baseOrientation"][1]) > tiltThreshold:
+        elif abs(observation["baseOrientation"][0]) > np.deg2rad(90 + tiltThreshold) or abs(observation["baseOrientation"][1]) > np.deg2rad(tiltThreshold):
             reward -= UPRIGHT
         
         return observation, reward, terminated, truncated, {}
