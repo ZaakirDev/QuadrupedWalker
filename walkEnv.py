@@ -8,9 +8,9 @@ class WalkerEnv(gym.Env):
 
         self.render_mode = render_mode
         if self.render_mode == "human":
-            p.connect(p.GUI)
+            self.physicsClient = p.connect(p.GUI)
         else:
-            p.connect(p.DIRECT)
+            self.physicsClient = p.connect(p.DIRECT)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0,0,-9.81)
@@ -52,7 +52,13 @@ class WalkerEnv(gym.Env):
                     high=np.inf,
                     shape=(2,),
                     dtype=np.float32
-                )
+                ),
+                "baseHeight": gym.spaces.Box(
+                    low=0.0,
+                    high=np.inf,
+                    shape=(1,),
+                    dtype=np.float32
+                ),
             }
         )
 
@@ -79,7 +85,8 @@ class WalkerEnv(gym.Env):
             "jointAngles": np.array(jointAngles, dtype=np.float32),
             "jointVelocities": np.array(jointVelocities, dtype=np.float32),
             "baseAngularVelocity": np.array(baseAngularVelocity, dtype=np.float32),
-            "relativeTargetPosition": relativeTargetPosition
+            "relativeTargetPosition": relativeTargetPosition,
+            "baseHeight": np.array([position[2]], dtype=np.float32),
         }
     
     def reset(self, *, seed=None, options=None):
@@ -115,6 +122,7 @@ class WalkerEnv(gym.Env):
         # REWARD CONSTANTS
         DISTANCE = 1.0
         UPRIGHT = 0.1
+        HEIGHT = 0.1
         COMPLETION = 50.0
 
         reward = 0
@@ -125,7 +133,7 @@ class WalkerEnv(gym.Env):
         p.setJointMotorControlArray(self.robot, self._jointArray, p.POSITION_CONTROL, action)
 
         # Advance the simulation
-        p.stepSimulation()
+        p.stepSimulation(physicsClientId=self.physicsClient)
 
         # Get Observations
         observation = self._get_obs()
@@ -140,6 +148,17 @@ class WalkerEnv(gym.Env):
         elif abs(observation["baseOrientation"][0]) > np.deg2rad(90 + max_tilt) or abs(observation["baseOrientation"][1]) > np.deg2rad(max_tilt):
             terminated = True
             reward -= COMPLETION
+
+        # Compute Height Reward
+        heightThreshold = 0.5
+        maxheightThreshold = 1
+        if observation["baseHeight"][0] == heightThreshold:
+            reward += HEIGHT
+        elif observation["baseHeight"][0] >= maxheightThreshold:
+            terminated = True
+            reward -= COMPLETION
+        else:
+            reward -= HEIGHT
 
         # Check if Truncated
         if self._step_count >= self.max_episode_steps:

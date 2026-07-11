@@ -8,12 +8,12 @@ class StandEnv(gym.Env):
 
         self.render_mode = render_mode
         if self.render_mode == "human":
-            p.connect(p.GUI)
+            self.physicsClient = p.connect(p.GUI)
         else:
-            p.connect(p.DIRECT)
+            self.physicsClient = p.connect(p.DIRECT)
         
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0,0,-9.81)
+        p.setGravity(0,0,-15)
         
         # Declare the agent and target location
         self._agent_location  = np.array([-1, -1, -1], dtype=np.float32)
@@ -52,19 +52,25 @@ class StandEnv(gym.Env):
                     shape=(2,),
                     dtype=np.float32
                 ),
+                "baseHeight": gym.spaces.Box(
+                    low=0.0,
+                    high=np.inf,
+                    shape=(1,),
+                    dtype=np.float32
+                ),
             }
         )
 
         self.action_space = gym.spaces.Box(
-            low=-1.5,
-            high=1.5,
+            low=-0.75,
+            high=0.75,
             shape=(12,),
             dtype=np.float32
         )
 
     def _get_obs(self):
         # Get and store all the observations as local variables
-        _, orientation = p.getBasePositionAndOrientation(self.robot)
+        position, orientation = p.getBasePositionAndOrientation(self.robot)
         roll, pitch, _ = p.getEulerFromQuaternion(orientation) # Used for base orientation
         joint_states = p.getJointStates(self.robot, self._jointArray) # Used for Joint Angles and joint Velocities
         jointAngles = np.array([state[0] for state in joint_states],dtype=np.float32)
@@ -77,7 +83,8 @@ class StandEnv(gym.Env):
             "jointAngles": np.array(jointAngles, dtype=np.float32),
             "jointVelocities": np.array(jointVelocities, dtype=np.float32),
             "baseAngularVelocity": np.array(baseAngularVelocity, dtype=np.float32),
-            "relativeTargetPosition": np.zeros(2, dtype=np.float32)
+            "relativeTargetPosition": np.zeros(2, dtype=np.float32),
+            "baseHeight": np.array([position[2]], dtype=np.float32),
         }
     
     def reset(self, *, seed=None, options=None):
@@ -102,6 +109,7 @@ class StandEnv(gym.Env):
 
         # REWARD CONSTANTS
         UPRIGHT = 0.1
+        HEIGHT = 0.1
         COMPLETION = 50.0
 
         reward = 0
@@ -112,7 +120,7 @@ class StandEnv(gym.Env):
         p.setJointMotorControlArray(self.robot, self._jointArray, p.POSITION_CONTROL, action)
 
         # Advance the simulation
-        p.stepSimulation()
+        p.stepSimulation(physicsClientId=self.physicsClient)
 
         # Get Observations
         observation = self._get_obs()
@@ -121,7 +129,20 @@ class StandEnv(gym.Env):
         max_tilt = 45
         if abs(observation["baseOrientation"][0]) > np.deg2rad(90 + max_tilt) or abs(observation["baseOrientation"][1]) > np.deg2rad(max_tilt):
             terminated = True
+            # print("Ep terminated because robot rolled over")
             reward -= COMPLETION
+
+        # Compute Height Reward
+        heightThreshold = 0.5
+        maxheightThreshold = 1
+        if observation["baseHeight"][0] == heightThreshold:
+            reward += HEIGHT
+        elif observation["baseHeight"][0] >= maxheightThreshold:
+            terminated = True
+            # print("ep terminated because the base height is too high")
+            reward -= COMPLETION
+        else:
+            reward -= HEIGHT
 
         # Check if Truncated
         if self._step_count >= self.max_episode_steps:
