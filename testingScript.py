@@ -1,29 +1,17 @@
 import pybullet
 import gymnasium as gym
 from walkEnv import *
-from standEnv import *
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 
-# Selection
-select = int(input("1. Walker\n2. Stand\n"))
-if select == 1:
-    Mode = "Walker"
-    gym.register(
-        id=f"gymnasium_env/Walker-v0",
-        entry_point=WalkerEnv,
-    )
-else:
-    Mode = "Stand"
-    gym.register(
-        id=f"gymnasium_env/Stand-v0",
-        entry_point=StandEnv,
-    )
+gym.register(
+    id=f"gymnasium_env/Walker-v0",
+    entry_point=WalkerEnv,
+)
 
 # Create the environment
-env = gym.make(f"gymnasium_env/{Mode}-v0", render_mode="human")
-# model = PPO("MultiInputPolicy", env, verbose=1)
-model = PPO.load(f"{Mode}PPO", env=env)
+env = gym.make(f"gymnasium_env/Walker-v0", render_mode="human")
+model = PPO.load(f"WalkerPPO", env=env)
 
 model.learn(total_timesteps=100000)
 # model.save("WalkerPPO")

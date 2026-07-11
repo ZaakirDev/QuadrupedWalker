@@ -18,7 +18,7 @@ class WalkerEnv(gym.Env):
         # Declare the agent and target location
         self._agent_location  = np.array([-1, -1, -1], dtype=np.float32) 
         self._target_location = np.array([-1, -1, -1], dtype=np.float32)
-        self.max_episode_steps = 1000
+        self.max_episode_steps = 1000 # NOTE TRY INCREASING THE MAX EPISODE STEPS
         self._step_count = 0
         
         self._jointArray = [i for i in range(12)]
@@ -123,6 +123,7 @@ class WalkerEnv(gym.Env):
         DISTANCE = 1.0
         UPRIGHT = 0.1
         HEIGHT = 0.1
+        JOINTVELOCITY = 0.01
         COMPLETION = 50.0
 
         reward = 0
@@ -148,6 +149,16 @@ class WalkerEnv(gym.Env):
         elif abs(observation["baseOrientation"][0]) > np.deg2rad(90 + max_tilt) or abs(observation["baseOrientation"][1]) > np.deg2rad(max_tilt):
             terminated = True
             reward -= COMPLETION
+        
+        # Compute Joint velocity reward
+        microJointThreshold = 0.5
+        maxJointThreshold = 1
+        if (observation["jointVelocities"] > np.array([microJointThreshold for _ in range(12)], dtype=np.float32)).all():
+            reward -= JOINTVELOCITY
+        
+        if (observation["jointVelocities"] > np.array([maxJointThreshold for _ in range(12)], dtype=np.float32)).all():
+            reward -= COMPLETION
+            terminated = True
 
         # Compute Height Reward
         heightThreshold = 0.5
