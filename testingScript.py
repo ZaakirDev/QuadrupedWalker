@@ -11,10 +11,9 @@ gym.register(
 
 # Create the environment
 env = gym.make(f"gymnasium_env/Walker-v0", render_mode="human")
-model = PPO.load(f"WalkerPPO", env=env)
+model = PPO.load(f"./Models/WalkerPPO", env=env)
 
 model.learn(total_timesteps=100000)
-# model.save("WalkerPPO")
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
 print(f"Mean reward: {mean_reward}")
 print(f"Std reward: {std_reward}")
