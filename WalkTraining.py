@@ -18,7 +18,7 @@ def main():
     env = SubprocVecEnv([make_env for _ in range(4)])
     model = PPO("MultiInputPolicy", env, verbose=1)
 
-    model.learn(total_timesteps=1250000)
+    model.learn(total_timesteps=5000000)
     model.save("./Models/WalkerPPO")
     mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
     print(f"Mean reward: {mean_reward}")

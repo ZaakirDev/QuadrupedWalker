@@ -17,7 +17,6 @@ class WalkerEnv(gym.Env):
         
         # Declare the agent and target location
         self._agent_location  = np.array([-1, -1, -1], dtype=np.float32) 
-        self._target_location = np.array([-1, -1, -1], dtype=np.float32)
         self.max_episode_steps = 1000 # NOTE TRY INCREASING THE MAX EPISODE STEPS
         self._step_count = 0
         
@@ -47,10 +46,10 @@ class WalkerEnv(gym.Env):
                     shape=(3,),
                     dtype=np.float32
                 ),
-                "relativeTargetPosition": gym.spaces.Box(
+                "baseVelocity": gym.spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=(2,),
+                    shape=(3,),
                     dtype=np.float32
                 ),
                 "baseHeight": gym.spaces.Box(
@@ -77,7 +76,7 @@ class WalkerEnv(gym.Env):
         jointAngles = np.array([state[0] for state in joint_states],dtype=np.float32)
         jointVelocities = np.array([state[1] for state in joint_states],dtype=np.float32)
         _, baseAngularVelocity = p.getBaseVelocity(self.robot) # Used for baseAngularVelocity
-        relativeTargetPosition = np.array([self._target_location[0] - position[0], self._target_location[1] - position[1]], dtype=np.float32)
+        baseVelocity = p.getBaseVelocity(self.robot)
 
         # Return all the stored observations as one dictionary with the same naming conventions and formats as the observation_space
         return {
@@ -85,7 +84,7 @@ class WalkerEnv(gym.Env):
             "jointAngles": np.array(jointAngles, dtype=np.float32),
             "jointVelocities": np.array(jointVelocities, dtype=np.float32),
             "baseAngularVelocity": np.array(baseAngularVelocity, dtype=np.float32),
-            "relativeTargetPosition": relativeTargetPosition,
+            "baseVelocity": np.array(baseVelocity[0], dtype=np.float32),
             "baseHeight": np.array([position[2]], dtype=np.float32),
         }
     
@@ -94,23 +93,13 @@ class WalkerEnv(gym.Env):
         
         agent_x = 0
         agent_y = 0
-
-        target_x = 0
-        target_y = 0
-
-        # while abs(target_x) < 2.5 and abs(target_y) < 2.5:
-        #     target_x = self.np_random.uniform(-5, 5)
-        #     target_y = self.np_random.uniform(-5, 5)
         
         self._agent_location = [agent_x, agent_y, 0.5]
-        self._target_location = [3, 0, 0.5]
-        self._prevDistance = ((target_x)**2 + (target_y)**2)**0.5
         self._step_count = 0
         
         p.resetSimulation()
         p.setGravity(0,0,-9.81)
         p.loadURDF("plane.urdf")
-        self.target = p.loadURDF("r2d2.urdf", self._target_location, p.getQuaternionFromEuler([0,0,0]))
         self.robot = p.loadURDF("laikago/laikago.urdf",self._agent_location, p.getQuaternionFromEuler([np.deg2rad(90),0,0]))
 
         observation = self._get_obs()
@@ -133,55 +122,30 @@ class WalkerEnv(gym.Env):
         observation = self._get_obs()
         
         """CHECK IF THE ROBOT HAS FALLEN OVER / REACHED THE TARGET"""  
-        # print(np.rad2deg(observation["baseOrientation"]))
-        max_tilt = 45
-
-        distance = np.linalg.norm(observation["relativeTargetPosition"])
-        if distance < 0.3:  # pick a threshold
+        heightThreshold = 0.3
+        if observation["baseHeight"][0] < heightThreshold:
             terminated = True
-            print("Target Reached!=======================================================")
-            reward += 20.0
-        elif abs(observation["baseOrientation"][0]) > np.deg2rad(90 + max_tilt) or abs(observation["baseOrientation"][1]) > np.deg2rad(max_tilt):
-            terminated = True
-            # print("Robot fallen over!")
-            reward -= 20.0
+            reward -= 10.0
         
         """COMPUTE THE REWARD FOR JOINT ANGULAR VELOCITY"""
         # NOTE: DONT ALLOW THE ROBOT TO HAVE AN w OF 0 Rad per sec
         microJointThreshold = 2.0
-        maxJointThreshold = 2.0
         if (np.abs(observation["jointVelocities"]) > np.array([microJointThreshold for _ in range(12)], dtype=np.float32)).any() or (np.abs(observation["jointVelocities"]) < np.array([0.2 for _ in range(12)], dtype=np.float32)).all():
             reward -= 0.1
-        
-        # if (np.abs(observation["jointVelocities"]) > np.array([maxJointThreshold for _ in range(12)], dtype=np.float32)).any():
-        #     reward -= 15.0
-        #     terminated = True
 
-        """COMPUTE THE REWARD FOR THE BASE HEIGHT"""
-        if observation["baseHeight"][0] >= 0.4 and observation["baseHeight"][0] <= 0.6:
-            reward += 0.2
-        # elif observation["baseHeight"][0] >= 1:
-        #     terminated = True
-        #     reward -= 15.0
-        else:
-            reward -= 0.1
+        """COMPUTE THE PUNISHMENT FOR THE BASE HEIGHT"""
+        reward -= abs((observation["baseHeight"][0]) - (0.45))/(0.45)
 
-        """COMPUTE THE REWARD FOR THE CURRENT DISTANCE FROM THE TARGET (SEE IF YOU'RE GETTING CLOSER)"""
-        currentDistance = ((observation["relativeTargetPosition"][0])**2 + (observation["relativeTargetPosition"][1])**2)**0.5
+        """COMPUTE THE REWARD FOR POSITIVE BASE VELOCITY"""
+        reward += abs(observation["baseVelocity"][0]) / 1
 
-        if currentDistance < self._prevDistance:
-            reward += 1.0
-        elif currentDistance > self._prevDistance:
-            reward -= 1.0
+        """COMPUTE PUNISHMENT FOR DEVIATING TOO MUCH ON THE Y AXIS"""
+        reward -= abs(observation["baseVelocity"][0]) / 1
         
-        self._prevDistance = currentDistance
+        """COMPUTE THE PUNISHMENT WHEN IT TILTS"""        
+        reward -= (abs(observation["baseOrientation"][0]) - np.deg2rad(90)) / 1
         
-        """COMPUTE THE REWARD WHEN IT TILTS"""
-        tiltThreshold = 20
-        if abs(observation["baseOrientation"][0]) < np.deg2rad(90 + tiltThreshold) and abs(observation["baseOrientation"][1]) < np.deg2rad(tiltThreshold):
-            reward += 0.1
-        elif abs(observation["baseOrientation"][0]) > np.deg2rad(90 + tiltThreshold) or abs(observation["baseOrientation"][1]) > np.deg2rad(tiltThreshold):
-            reward -= 0.1
+        reward -= (abs(observation["baseOrientation"][1])) / 1
 
         # Check if Truncated
         if self._step_count >= self.max_episode_steps:
